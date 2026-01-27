@@ -1,8 +1,8 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Loader2 } from "lucide-react";
 import MovieCard from "./MovieCard";
 
 interface Movie {
-  id: number;
+  id: string;
   title: string;
   poster: string;
   rating: number;
@@ -15,9 +15,32 @@ interface MovieSectionProps {
   title: string;
   subtitle?: string;
   movies: Movie[];
+  isLoading?: boolean;
 }
 
-const MovieSection = ({ title, subtitle, movies }: MovieSectionProps) => {
+const MovieSection = ({ title, subtitle, movies, isLoading }: MovieSectionProps) => {
+  if (isLoading) {
+    return (
+      <section className="py-8">
+        <div className="container mx-auto px-4">
+          <div className="mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground">{title}</h2>
+            {subtitle && (
+              <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+            )}
+          </div>
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (movies.length === 0) {
+    return null;
+  }
+
   return (
     <section className="py-8">
       <div className="container mx-auto px-4">
@@ -40,6 +63,7 @@ const MovieSection = ({ title, subtitle, movies }: MovieSectionProps) => {
           {movies.map((movie) => (
             <MovieCard
               key={movie.id}
+              id={movie.id}
               title={movie.title}
               poster={movie.poster}
               rating={movie.rating}

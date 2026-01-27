@@ -1,7 +1,9 @@
 import { Star, Heart } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 interface MovieCardProps {
+  id: string;
   title: string;
   poster: string;
   rating: number;
@@ -10,11 +12,15 @@ interface MovieCardProps {
   language: string;
 }
 
-const MovieCard = ({ title, poster, rating, votes, genres, language }: MovieCardProps) => {
+const MovieCard = ({ id, title, poster, rating, votes, genres, language }: MovieCardProps) => {
   const [isLiked, setIsLiked] = useState(false);
+  const navigate = useNavigate();
 
   return (
-    <div className="group relative flex-shrink-0 w-[180px] sm:w-[200px] cursor-pointer">
+    <div 
+      className="group relative flex-shrink-0 w-[180px] sm:w-[200px] cursor-pointer"
+      onClick={() => navigate(`/movie/${id}`)}
+    >
       {/* Poster Container */}
       <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-secondary">
         <img

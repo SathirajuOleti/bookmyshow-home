@@ -2,9 +2,25 @@ import Navbar from "@/components/Navbar";
 import HeroCarousel from "@/components/HeroCarousel";
 import MovieSection from "@/components/MovieSection";
 import Footer from "@/components/Footer";
-import { recommendedMovies, newReleases, upcomingMovies } from "@/data/movies";
+import { useMovies } from "@/hooks/useMovies";
 
 const Index = () => {
+  const { data: nowShowingMovies, isLoading: nowShowingLoading } = useMovies("now_showing");
+  const { data: comingSoonMovies, isLoading: comingSoonLoading } = useMovies("coming_soon");
+
+  // Transform movies for MovieSection
+  const transformMovies = (movies: typeof nowShowingMovies) => {
+    return movies?.map((movie) => ({
+      id: movie.id,
+      title: movie.title,
+      poster: movie.poster,
+      rating: Number(movie.rating) || 0,
+      votes: movie.votes,
+      genres: movie.genres,
+      language: movie.language,
+    })) || [];
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
@@ -15,25 +31,20 @@ const Index = () => {
 
       {/* Movie Sections */}
       <main>
-        {/* Recommended Movies */}
+        {/* Now Showing */}
         <MovieSection
-          title="Recommended Movies"
-          subtitle="Based on your interests"
-          movies={recommendedMovies}
+          title="Now Showing"
+          subtitle="Book tickets for movies in theaters"
+          movies={transformMovies(nowShowingMovies)}
+          isLoading={nowShowingLoading}
         />
 
-        {/* New Releases */}
+        {/* Coming Soon */}
         <MovieSection
-          title="New Releases"
-          subtitle="Fresh in cinemas now"
-          movies={newReleases}
-        />
-
-        {/* Upcoming Movies */}
-        <MovieSection
-          title="Upcoming Movies"
+          title="Coming Soon"
           subtitle="Get notified when tickets are available"
-          movies={upcomingMovies}
+          movies={transformMovies(comingSoonMovies)}
+          isLoading={comingSoonLoading}
         />
 
         {/* Genre Quick Links */}
