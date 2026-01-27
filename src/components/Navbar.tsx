@@ -1,10 +1,26 @@
 import { useState } from "react";
-import { Search, Menu, X, MapPin, ChevronDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Search, Menu, X, MapPin, ChevronDown, User, LogOut, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   return (
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b border-border">
@@ -40,10 +56,32 @@ const Navbar = () => {
               <ChevronDown className="w-3 h-3" />
             </button>
 
-            {/* Sign In Button */}
-            <Button variant="default" size="sm" className="bg-primary hover:bg-primary/90">
-              Sign In
-            </Button>
+            {/* User Menu or Sign In */}
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-2">
+                    <User className="w-4 h-4" />
+                    <span className="hidden sm:inline">Account</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => navigate("/my-bookings")} className="gap-2 cursor-pointer">
+                    <Ticket className="w-4 h-4" />
+                    My Bookings
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSignOut} className="gap-2 cursor-pointer text-destructive">
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button variant="default" size="sm" className="bg-primary hover:bg-primary/90" onClick={() => navigate("/auth")}>
+                Sign In
+              </Button>
+            )}
 
             {/* Mobile Menu Toggle */}
             <button
@@ -61,7 +99,7 @@ const Navbar = () => {
 
         {/* Navigation Links - Desktop */}
         <nav className="hidden md:flex items-center gap-8 h-12">
-          <a href="#" className="text-sm text-foreground font-medium border-b-2 border-primary pb-3">
+          <a href="/" className="text-sm text-foreground font-medium border-b-2 border-primary pb-3">
             Movies
           </a>
           <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors pb-3">
@@ -104,12 +142,25 @@ const Navbar = () => {
 
             {/* Mobile Navigation Links */}
             <nav className="flex flex-col gap-3">
-              <a href="#" className="text-foreground font-medium py-2">Movies</a>
+              <a href="/" className="text-foreground font-medium py-2">Movies</a>
               <a href="#" className="text-muted-foreground py-2">Stream</a>
               <a href="#" className="text-muted-foreground py-2">Events</a>
               <a href="#" className="text-muted-foreground py-2">Plays</a>
               <a href="#" className="text-muted-foreground py-2">Sports</a>
               <a href="#" className="text-muted-foreground py-2">Activities</a>
+              {user && (
+                <>
+                  <hr className="border-border" />
+                  <a href="/my-bookings" className="text-muted-foreground py-2 flex items-center gap-2">
+                    <Ticket className="w-4 h-4" />
+                    My Bookings
+                  </a>
+                  <button onClick={handleSignOut} className="text-destructive py-2 flex items-center gap-2 text-left">
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </>
+              )}
             </nav>
           </div>
         </div>
