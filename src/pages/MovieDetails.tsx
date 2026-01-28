@@ -29,13 +29,6 @@ const MovieDetails = () => {
   const [currentBookingId, setCurrentBookingId] = useState<string | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
 
-  // Group showtimes by date
-  const showtimesByDate = showtimes?.reduce((acc, showtime) => {
-    const date = showtime.show_date;
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(showtime);
-    return acc;
-  }, {} as Record<string, Showtime[]>) || {};
 
   const handleSelectShowtime = (showtime: Showtime) => {
     if (!user) {
@@ -218,70 +211,98 @@ const MovieDetails = () => {
           </div>
         </div>
 
-        {/* Showtimes Section */}
+        {/* Theaters & Showtimes Section */}
         {movie.status === "now_showing" && (
           <section id="showtimes" className="mt-16">
-            <h2 className="text-2xl font-bold text-foreground mb-6">Select Showtime</h2>
+            <h2 className="text-2xl font-bold text-foreground mb-6">
+              Theaters Showing {movie.title}
+            </h2>
 
             {showtimesLoading ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div>
-            ) : Object.keys(showtimesByDate).length === 0 ? (
+            ) : !showtimes || showtimes.length === 0 ? (
               <Card className="bg-secondary/50">
                 <CardContent className="py-8 text-center">
-                  <p className="text-muted-foreground">No showtimes available at the moment.</p>
+                  <p className="text-muted-foreground">No theaters showing this movie at the moment.</p>
                 </CardContent>
               </Card>
             ) : (
               <div className="space-y-6">
-                {Object.entries(showtimesByDate).map(([date, shows]) => (
-                  <Card key={date} className="bg-card border-border">
+                {/* Group showtimes by theater first */}
+                {Object.entries(
+                  showtimes.reduce((acc, show) => {
+                    const theaterId = show.theater?.id || "unknown";
+                    if (!acc[theaterId]) {
+                      acc[theaterId] = { theater: show.theater, showsByDate: {} };
+                    }
+                    const date = show.show_date;
+                    if (!acc[theaterId].showsByDate[date]) {
+                      acc[theaterId].showsByDate[date] = [];
+                    }
+                    acc[theaterId].showsByDate[date].push(show);
+                    return acc;
+                  }, {} as Record<string, { theater: Showtime["theater"]; showsByDate: Record<string, Showtime[]> }>)
+                ).map(([theaterId, { theater, showsByDate }]) => (
+                  <Card key={theaterId} className="bg-card border-border">
                     <CardHeader className="pb-4">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <Calendar className="w-5 h-5 text-primary" />
-                        {format(new Date(date), "EEEE, MMMM d, yyyy")}
-                      </CardTitle>
+                      <div className="flex items-start gap-3">
+                        <MapPin className="w-5 h-5 text-primary mt-1" />
+                        <div>
+                          <CardTitle className="text-lg">{theater?.name || "Unknown Theater"}</CardTitle>
+                          <p className="text-sm text-muted-foreground mt-1">{theater?.location}, {theater?.city}</p>
+                          {theater?.facilities && theater.facilities.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {theater.facilities.map((facility) => (
+                                <span
+                                  key={facility}
+                                  className="px-2 py-0.5 text-xs bg-secondary text-muted-foreground rounded"
+                                >
+                                  {facility}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </CardHeader>
                     <CardContent>
-                      {/* Group by theater */}
-                      {Object.entries(
-                        shows.reduce((acc, show) => {
-                          const theaterId = show.theater?.id || "unknown";
-                          if (!acc[theaterId]) acc[theaterId] = { theater: show.theater, shows: [] };
-                          acc[theaterId].shows.push(show);
-                          return acc;
-                        }, {} as Record<string, { theater: Showtime["theater"]; shows: Showtime[] }>)
-                      ).map(([theaterId, { theater, shows: theaterShows }]) => (
-                        <div key={theaterId} className="mb-4 last:mb-0">
-                          <div className="flex items-start gap-2 mb-3">
-                            <MapPin className="w-4 h-4 text-primary mt-1" />
-                            <div>
-                              <p className="font-medium text-foreground">{theater?.name || "Unknown Theater"}</p>
-                              <p className="text-sm text-muted-foreground">{theater?.location}</p>
+                      <div className="space-y-4">
+                        {Object.entries(showsByDate)
+                          .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
+                          .map(([date, shows]) => (
+                            <div key={date} className="border-t border-border pt-4 first:border-t-0 first:pt-0">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Calendar className="w-4 h-4 text-primary" />
+                                <span className="font-medium text-foreground">
+                                  {format(new Date(date), "EEE, MMM d")}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-2 ml-6">
+                                {shows
+                                  .sort((a, b) => a.show_time.localeCompare(b.show_time))
+                                  .map((show) => (
+                                    <Button
+                                      key={show.id}
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={show.available_seats === 0}
+                                      onClick={() => handleSelectShowtime(show)}
+                                      className="min-w-[100px] h-auto py-2"
+                                    >
+                                      <div className="text-center">
+                                        <p className="font-semibold">{show.show_time.slice(0, 5)}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          ₹{show.price} • {show.available_seats} seats
+                                        </p>
+                                      </div>
+                                    </Button>
+                                  ))}
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex flex-wrap gap-2 ml-6">
-                            {theaterShows.map((show) => (
-                              <Button
-                                key={show.id}
-                                variant="outline"
-                                size="sm"
-                                disabled={show.available_seats === 0}
-                                onClick={() => handleSelectShowtime(show)}
-                                className="min-w-[80px]"
-                              >
-                                <div className="text-center">
-                                  <p className="font-medium">{show.show_time.slice(0, 5)}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    ₹{show.price} • {show.available_seats} left
-                                  </p>
-                                </div>
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
+                          ))}
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
