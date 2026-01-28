@@ -9,6 +9,7 @@ export interface Booking {
   user_id: string;
   showtime_id: string;
   seats: number;
+  seat_numbers: string[];
   total_amount: number;
   payment_status: string;
   booking_status: string;
@@ -89,6 +90,7 @@ export const useBookings = () => {
 interface CreateBookingParams {
   showtimeId: string;
   seats: number;
+  seatNumbers: string[];
   totalAmount: number;
 }
 
@@ -97,7 +99,7 @@ export const useCreateBooking = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ showtimeId, seats, totalAmount }: CreateBookingParams) => {
+    mutationFn: async ({ showtimeId, seats, seatNumbers, totalAmount }: CreateBookingParams) => {
       if (!user) throw new Error("Must be logged in to book");
 
       // Create booking
@@ -107,6 +109,7 @@ export const useCreateBooking = () => {
           user_id: user.id,
           showtime_id: showtimeId,
           seats,
+          seat_numbers: seatNumbers,
           total_amount: totalAmount,
           payment_status: "pending",
           booking_status: "confirmed",

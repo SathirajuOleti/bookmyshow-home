@@ -1,16 +1,18 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMovie } from "@/hooks/useMovies";
 import { useShowtimes, Showtime } from "@/hooks/useShowtimes";
 import { useCreateBooking, useUpdatePaymentStatus } from "@/hooks/useBookings";
+import { useBookedSeats } from "@/hooks/useBookedSeats";
 import { useAuth } from "@/contexts/AuthContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import SeatSelector from "@/components/SeatSelector";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Star, Clock, Calendar, MapPin, Ticket, Loader2, CreditCard, CheckCircle } from "lucide-react";
+import { Star, Clock, Calendar, MapPin, Ticket, Loader2, CreditCard, ArrowRight, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 
 const MovieDetails = () => {
@@ -24,12 +26,15 @@ const MovieDetails = () => {
 
   const [selectedShowtime, setSelectedShowtime] = useState<Showtime | null>(null);
   const [seats, setSeats] = useState(1);
+  const [selectedSeatNumbers, setSelectedSeatNumbers] = useState<string[]>([]);
+  const [bookingStep, setBookingStep] = useState<"tickets" | "seats">("tickets");
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [currentBookingId, setCurrentBookingId] = useState<string | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
 
-
+  // Fetch booked seats for selected showtime
+  const { data: bookedSeats = [], isLoading: bookedSeatsLoading } = useBookedSeats(selectedShowtime?.id || "");
   const handleSelectShowtime = (showtime: Showtime) => {
     if (!user) {
       toast({
@@ -42,11 +47,33 @@ const MovieDetails = () => {
     }
     setSelectedShowtime(showtime);
     setSeats(1);
+    setSelectedSeatNumbers([]);
+    setBookingStep("tickets");
     setBookingDialogOpen(true);
   };
 
+  const handleSeatSelectionChange = useCallback((selected: string[]) => {
+    setSelectedSeatNumbers(selected);
+  }, []);
+
+  const handleProceedToSeats = () => {
+    setBookingStep("seats");
+  };
+
+  const handleBackToTickets = () => {
+    setBookingStep("tickets");
+    setSelectedSeatNumbers([]);
+  };
+
   const handleBooking = async () => {
-    if (!selectedShowtime) return;
+    if (!selectedShowtime || selectedSeatNumbers.length !== seats) {
+      toast({
+        title: "Select seats",
+        description: `Please select exactly ${seats} seat(s)`,
+        variant: "destructive",
+      });
+      return;
+    }
 
     const totalAmount = selectedShowtime.price * seats;
 
@@ -54,6 +81,7 @@ const MovieDetails = () => {
       const booking = await createBooking.mutateAsync({
         showtimeId: selectedShowtime.id,
         seats,
+        seatNumbers: selectedSeatNumbers,
         totalAmount,
       });
 
@@ -313,64 +341,120 @@ const MovieDetails = () => {
       </main>
 
       {/* Booking Dialog */}
-      <Dialog open={bookingDialogOpen} onOpenChange={setBookingDialogOpen}>
-        <DialogContent>
+      <Dialog open={bookingDialogOpen} onOpenChange={(open) => {
+        setBookingDialogOpen(open);
+        if (!open) {
+          setBookingStep("tickets");
+          setSelectedSeatNumbers([]);
+        }
+      }}>
+        <DialogContent className={bookingStep === "seats" ? "max-w-2xl" : ""}>
           <DialogHeader>
-            <DialogTitle>Book Tickets</DialogTitle>
+            <DialogTitle>
+              {bookingStep === "tickets" ? "Book Tickets" : "Select Your Seats"}
+            </DialogTitle>
             <DialogDescription>
               {movie.title} at {selectedShowtime?.theater?.name}
+              {bookingStep === "seats" && (
+                <span className="block mt-1">
+                  {selectedShowtime && format(new Date(selectedShowtime.show_date), "MMM d")} at {selectedShowtime?.show_time.slice(0, 5)}
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Date & Time</span>
-              <span className="font-medium">
-                {selectedShowtime && format(new Date(selectedShowtime.show_date), "MMM d")} at {selectedShowtime?.show_time.slice(0, 5)}
-              </span>
+
+          {bookingStep === "tickets" ? (
+            <div className="space-y-4 py-4">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Date & Time</span>
+                <span className="font-medium">
+                  {selectedShowtime && format(new Date(selectedShowtime.show_date), "MMM d")} at {selectedShowtime?.show_time.slice(0, 5)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Price per ticket</span>
+                <span className="font-medium">₹{selectedShowtime?.price}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Number of seats</span>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setSeats(Math.max(1, seats - 1))}
+                  >
+                    -
+                  </Button>
+                  <span className="w-8 text-center font-medium">{seats}</span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setSeats(Math.min(selectedShowtime?.available_seats || 10, seats + 1))}
+                  >
+                    +
+                  </Button>
+                </div>
+              </div>
+              <div className="border-t border-border pt-4 flex items-center justify-between">
+                <span className="font-semibold">Total Amount</span>
+                <span className="text-xl font-bold text-primary">
+                  ₹{(selectedShowtime?.price || 0) * seats}
+                </span>
+              </div>
+              <Button
+                className="w-full gap-2"
+                onClick={handleProceedToSeats}
+              >
+                Select Seats
+                <ArrowRight className="w-4 h-4" />
+              </Button>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Price per ticket</span>
-              <span className="font-medium">₹{selectedShowtime?.price}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Number of seats</span>
-              <div className="flex items-center gap-3">
+          ) : (
+            <div className="space-y-4 py-4">
+              {bookedSeatsLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                </div>
+              ) : (
+                <SeatSelector
+                  totalSeats={selectedShowtime?.total_seats || 100}
+                  bookedSeats={bookedSeats}
+                  maxSelectable={seats}
+                  onSelectionChange={handleSeatSelectionChange}
+                />
+              )}
+
+              <div className="border-t border-border pt-4 flex items-center justify-between">
+                <span className="font-semibold">Total Amount</span>
+                <span className="text-xl font-bold text-primary">
+                  ₹{(selectedShowtime?.price || 0) * seats}
+                </span>
+              </div>
+
+              <div className="flex gap-3">
                 <Button
                   variant="outline"
-                  size="icon"
-                  onClick={() => setSeats(Math.max(1, seats - 1))}
+                  className="gap-2"
+                  onClick={handleBackToTickets}
                 >
-                  -
+                  <ArrowLeft className="w-4 h-4" />
+                  Back
                 </Button>
-                <span className="w-8 text-center font-medium">{seats}</span>
                 <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setSeats(Math.min(selectedShowtime?.available_seats || 10, seats + 1))}
+                  className="flex-1 gap-2"
+                  onClick={handleBooking}
+                  disabled={createBooking.isPending || selectedSeatNumbers.length !== seats}
                 >
-                  +
+                  {createBooking.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Ticket className="w-4 h-4" />
+                  )}
+                  Confirm Booking ({selectedSeatNumbers.length}/{seats} seats)
                 </Button>
               </div>
             </div>
-            <div className="border-t border-border pt-4 flex items-center justify-between">
-              <span className="font-semibold">Total Amount</span>
-              <span className="text-xl font-bold text-primary">
-                ₹{(selectedShowtime?.price || 0) * seats}
-              </span>
-            </div>
-            <Button
-              className="w-full gap-2"
-              onClick={handleBooking}
-              disabled={createBooking.isPending}
-            >
-              {createBooking.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Ticket className="w-4 h-4" />
-              )}
-              Confirm Booking
-            </Button>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
 

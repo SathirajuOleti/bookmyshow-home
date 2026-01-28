@@ -20,6 +20,7 @@ export type Database = {
           created_at: string
           id: string
           payment_status: string | null
+          seat_numbers: string[] | null
           seats: number
           showtime_id: string
           total_amount: number
@@ -31,6 +32,7 @@ export type Database = {
           created_at?: string
           id?: string
           payment_status?: string | null
+          seat_numbers?: string[] | null
           seats?: number
           showtime_id: string
           total_amount: number
@@ -42,6 +44,7 @@ export type Database = {
           created_at?: string
           id?: string
           payment_status?: string | null
+          seat_numbers?: string[] | null
           seats?: number
           showtime_id?: string
           total_amount?: number
