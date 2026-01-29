@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMovie } from "@/hooks/useMovies";
 import { useShowtimes, Showtime } from "@/hooks/useShowtimes";
-import { useCreateBooking, useUpdatePaymentStatus } from "@/hooks/useBookings";
+import { useCreateBooking } from "@/hooks/useBookings";
 import { useBookedSeats } from "@/hooks/useBookedSeats";
 import { useAuth } from "@/contexts/AuthContext";
 import Navbar from "@/components/Navbar";
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Star, Clock, Calendar, MapPin, Ticket, Loader2, CreditCard, ArrowRight, ArrowLeft } from "lucide-react";
+import { Star, Clock, Calendar, MapPin, Ticket, Loader2, ArrowRight, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 
 const MovieDetails = () => {
@@ -22,16 +22,12 @@ const MovieDetails = () => {
   const { data: movie, isLoading: movieLoading } = useMovie(id || "");
   const { data: showtimes, isLoading: showtimesLoading } = useShowtimes(id || "");
   const createBooking = useCreateBooking();
-  const updatePayment = useUpdatePaymentStatus();
 
   const [selectedShowtime, setSelectedShowtime] = useState<Showtime | null>(null);
   const [seats, setSeats] = useState(1);
   const [selectedSeatNumbers, setSelectedSeatNumbers] = useState<string[]>([]);
   const [bookingStep, setBookingStep] = useState<"tickets" | "seats">("tickets");
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [currentBookingId, setCurrentBookingId] = useState<string | null>(null);
-  const [paymentProcessing, setPaymentProcessing] = useState(false);
 
   // Fetch booked seats for selected showtime
   const { data: bookedSeats = [], isLoading: bookedSeatsLoading } = useBookedSeats(selectedShowtime?.id || "");
@@ -85,15 +81,16 @@ const MovieDetails = () => {
         totalAmount,
       });
 
-      setCurrentBookingId(booking.id);
       setBookingDialogOpen(false);
-      setPaymentDialogOpen(true);
 
       // Mock email notification - show toast
       toast({
-        title: "📧 Booking Confirmed!",
-        description: `Email notification sent for ${movie?.title} - ${seats} ticket(s)`,
+        title: "📧 Booking Created!",
+        description: `Redirecting to payment for ${movie?.title} - ${seats} ticket(s)`,
       });
+
+      // Navigate to payment page
+      navigate(`/payment/${booking.id}`);
     } catch (error) {
       toast({
         title: "Booking failed",
@@ -103,39 +100,6 @@ const MovieDetails = () => {
     }
   };
 
-  const handleMockPayment = async () => {
-    if (!currentBookingId) return;
-
-    setPaymentProcessing(true);
-
-    // Simulate payment delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    try {
-      await updatePayment.mutateAsync({
-        bookingId: currentBookingId,
-        status: "paid",
-      });
-
-      setPaymentProcessing(false);
-      setPaymentDialogOpen(false);
-
-      // Mock payment confirmation notification
-      toast({
-        title: "✅ Payment Successful!",
-        description: "Your booking has been confirmed. Enjoy your movie!",
-      });
-
-      navigate("/my-bookings");
-    } catch (error) {
-      setPaymentProcessing(false);
-      toast({
-        title: "Payment failed",
-        description: "Please try again",
-        variant: "destructive",
-      });
-    }
-  };
 
   if (movieLoading) {
     return (
@@ -458,42 +422,6 @@ const MovieDetails = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Payment Dialog */}
-      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Complete Payment</DialogTitle>
-            <DialogDescription>
-              Mock payment for your booking
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {!paymentProcessing ? (
-              <>
-                <div className="p-4 bg-secondary/50 rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-1">Amount to pay</p>
-                  <p className="text-2xl font-bold text-primary">
-                    ₹{(selectedShowtime?.price || 0) * seats}
-                  </p>
-                </div>
-                <p className="text-sm text-muted-foreground text-center">
-                  This is a mock payment. Click below to simulate a successful payment.
-                </p>
-                <Button className="w-full gap-2" onClick={handleMockPayment}>
-                  <CreditCard className="w-4 h-4" />
-                  Pay Now (Mock)
-                </Button>
-              </>
-            ) : (
-              <div className="text-center py-8">
-                <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
-                <p className="text-lg font-medium">Processing payment...</p>
-                <p className="text-sm text-muted-foreground">Please wait</p>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <Footer />
     </div>
