@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMovie } from "@/hooks/useMovies";
 import { useShowtimes, Showtime } from "@/hooks/useShowtimes";
@@ -8,12 +8,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SeatSelector from "@/components/SeatSelector";
+import DateSelector from "@/components/DateSelector";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { Star, Clock, Calendar, MapPin, Ticket, Loader2, ArrowRight, ArrowLeft } from "lucide-react";
-import { format } from "date-fns";
+import { format, isSameDay, parseISO } from "date-fns";
 
 const MovieDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,10 +25,34 @@ const MovieDetails = () => {
   const createBooking = useCreateBooking();
 
   const [selectedShowtime, setSelectedShowtime] = useState<Showtime | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [seats, setSeats] = useState(1);
   const [selectedSeatNumbers, setSelectedSeatNumbers] = useState<string[]>([]);
   const [bookingStep, setBookingStep] = useState<"tickets" | "seats">("tickets");
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
+
+  // Get unique dates from showtimes
+  const availableDates = useMemo(() => {
+    if (!showtimes || showtimes.length === 0) return [];
+    
+    const uniqueDates = [...new Set(showtimes.map((s) => s.show_date))];
+    return uniqueDates
+      .map((d) => parseISO(d))
+      .sort((a, b) => a.getTime() - b.getTime());
+  }, [showtimes]);
+
+  // Auto-select first date when showtimes load
+  useMemo(() => {
+    if (availableDates.length > 0 && !selectedDate) {
+      setSelectedDate(availableDates[0]);
+    }
+  }, [availableDates, selectedDate]);
+
+  // Filter showtimes by selected date
+  const filteredShowtimes = useMemo(() => {
+    if (!showtimes || !selectedDate) return [];
+    return showtimes.filter((s) => isSameDay(parseISO(s.show_date), selectedDate));
+  }, [showtimes, selectedDate]);
 
   // Fetch booked seats for selected showtime
   const { data: bookedSeats = [], isLoading: bookedSeatsLoading } = useBookedSeats(selectedShowtime?.id || "");
@@ -222,82 +247,95 @@ const MovieDetails = () => {
               </Card>
             ) : (
               <div className="space-y-6">
-                {/* Group showtimes by theater first */}
-                {Object.entries(
-                  showtimes.reduce((acc, show) => {
-                    const theaterId = show.theater?.id || "unknown";
-                    if (!acc[theaterId]) {
-                      acc[theaterId] = { theater: show.theater, showsByDate: {} };
-                    }
-                    const date = show.show_date;
-                    if (!acc[theaterId].showsByDate[date]) {
-                      acc[theaterId].showsByDate[date] = [];
-                    }
-                    acc[theaterId].showsByDate[date].push(show);
-                    return acc;
-                  }, {} as Record<string, { theater: Showtime["theater"]; showsByDate: Record<string, Showtime[]> }>)
-                ).map(([theaterId, { theater, showsByDate }]) => (
-                  <Card key={theaterId} className="bg-card border-border">
-                    <CardHeader className="pb-4">
-                      <div className="flex items-start gap-3">
-                        <MapPin className="w-5 h-5 text-primary mt-1" />
-                        <div>
-                          <CardTitle className="text-lg">{theater?.name || "Unknown Theater"}</CardTitle>
-                          <p className="text-sm text-muted-foreground mt-1">{theater?.location}, {theater?.city}</p>
-                          {theater?.facilities && theater.facilities.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {theater.facilities.map((facility) => (
-                                <span
-                                  key={facility}
-                                  className="px-2 py-0.5 text-xs bg-secondary text-muted-foreground rounded"
-                                >
-                                  {facility}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {Object.entries(showsByDate)
-                          .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
-                          .map(([date, shows]) => (
-                            <div key={date} className="border-t border-border pt-4 first:border-t-0 first:pt-0">
-                              <div className="flex items-center gap-2 mb-3">
-                                <Calendar className="w-4 h-4 text-primary" />
-                                <span className="font-medium text-foreground">
-                                  {format(new Date(date), "EEE, MMM d")}
-                                </span>
-                              </div>
-                              <div className="flex flex-wrap gap-2 ml-6">
-                                {shows
-                                  .sort((a, b) => a.show_time.localeCompare(b.show_time))
-                                  .map((show) => (
-                                    <Button
-                                      key={show.id}
-                                      variant="outline"
-                                      size="sm"
-                                      disabled={show.available_seats === 0}
-                                      onClick={() => handleSelectShowtime(show)}
-                                      className="min-w-[100px] h-auto py-2"
-                                    >
-                                      <div className="text-center">
-                                        <p className="font-semibold">{show.show_time.slice(0, 5)}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                          ₹{show.price} • {show.available_seats} seats
-                                        </p>
-                                      </div>
-                                    </Button>
-                                  ))}
-                              </div>
-                            </div>
-                          ))}
-                      </div>
+                {/* Date Selector */}
+                <div className="mb-6">
+                  <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    Select Date
+                  </h3>
+                  <DateSelector
+                    dates={availableDates}
+                    selectedDate={selectedDate}
+                    onSelectDate={setSelectedDate}
+                  />
+                </div>
+
+                {/* Selected date info */}
+                {selectedDate && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground border-b border-border pb-4">
+                    <span>Showing theaters for</span>
+                    <span className="font-semibold text-foreground">
+                      {format(selectedDate, "EEEE, MMMM d, yyyy")}
+                    </span>
+                  </div>
+                )}
+
+                {/* Theaters grouped by ID for selected date */}
+                {filteredShowtimes.length === 0 ? (
+                  <Card className="bg-secondary/50">
+                    <CardContent className="py-8 text-center">
+                      <p className="text-muted-foreground">No showtimes available for this date.</p>
                     </CardContent>
                   </Card>
-                ))}
+                ) : (
+                  Object.entries(
+                    filteredShowtimes.reduce((acc, show) => {
+                      const theaterId = show.theater?.id || "unknown";
+                      if (!acc[theaterId]) {
+                        acc[theaterId] = { theater: show.theater, shows: [] };
+                      }
+                      acc[theaterId].shows.push(show);
+                      return acc;
+                    }, {} as Record<string, { theater: Showtime["theater"]; shows: Showtime[] }>)
+                  ).map(([theaterId, { theater, shows }]) => (
+                    <Card key={theaterId} className="bg-card border-border">
+                      <CardHeader className="pb-4">
+                        <div className="flex items-start gap-3">
+                          <MapPin className="w-5 h-5 text-primary mt-1" />
+                          <div>
+                            <CardTitle className="text-lg">{theater?.name || "Unknown Theater"}</CardTitle>
+                            <p className="text-sm text-muted-foreground mt-1">{theater?.location}, {theater?.city}</p>
+                            {theater?.facilities && theater.facilities.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {theater.facilities.map((facility) => (
+                                  <span
+                                    key={facility}
+                                    className="px-2 py-0.5 text-xs bg-secondary text-muted-foreground rounded"
+                                  >
+                                    {facility}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex flex-wrap gap-2">
+                          {shows
+                            .sort((a, b) => a.show_time.localeCompare(b.show_time))
+                            .map((show) => (
+                              <Button
+                                key={show.id}
+                                variant="outline"
+                                size="sm"
+                                disabled={show.available_seats === 0}
+                                onClick={() => handleSelectShowtime(show)}
+                                className="min-w-[100px] h-auto py-2"
+                              >
+                                <div className="text-center">
+                                  <p className="font-semibold">{show.show_time.slice(0, 5)}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    ₹{show.price} • {show.available_seats} seats
+                                  </p>
+                                </div>
+                              </Button>
+                            ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
               </div>
             )}
           </section>
